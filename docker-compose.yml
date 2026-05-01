@@ -36,4 +36,4 @@ services:
       - ./scripts:/workspace/scripts:rw
 
       # Data (read-only)
-      - /data03/MRI_hackaton_data/Data_collection/bids/:/workspace/data:ro
+      - /path/to/your/data/directory/:/workspace/data:ro
