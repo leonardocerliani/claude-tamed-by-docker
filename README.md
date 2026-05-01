@@ -4,6 +4,7 @@ This setup lets you run Claude Code inside a secure Docker container on the serv
 
 Each experiment lives in its own git repository. Scripts, Claude history, and custom skills are all version-controlled and backed up. Credentials are never committed.
 
+> [!NOTE]
 > **Prerequisites:** Docker and Docker Compose must be installed, and the `claude_SBL` image must already be available on this server (ask your admin if it isn't). A github account and _very_ basic familiarity with version control are also assumed.
 
 ![](./assets/docker-claude.png)
