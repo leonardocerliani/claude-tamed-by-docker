@@ -4,7 +4,7 @@ This setup lets you run Claude Code inside a secure Docker container on the serv
 
 Each experiment lives in its own git repository. Scripts, Claude history, and custom skills are all version-controlled and backed up. Credentials are never committed.
 
-**Prerequisites:** Docker and Docker Compose must be installed, and the `claude_sbl` image must already be available on this server (ask your admin if it isn't). A github account and _very_ basic familiarity with version control are also assumed.
+**Prerequisites:** Docker and Docker Compose must be installed, and the `claude_sbl` image must already be available on this server (ask your admin if it isn't). A GitHub account and basic familiarity with version control are also assumed.
 
 ![](./assets/docker-claude.png)
 
@@ -13,37 +13,37 @@ Each experiment lives in its own git repository. Scripts, Claude history, and cu
 ## Concept: one folder = one experiment = one git repo
 
 > [!NOTE]
-> In the following replace 
-> - `storm_user` with your storm username
-> - `exp_1` with the name of one of your experiment
+> In the following, replace:
+> - `storm_user` with your STORM username
+> - `exp_1` with the name of your experiment
 
-The main idea is to have Claude working in an isolated environment so that the damage caused by potential unwanted actions can be limited as much as possible, and Claude will have no access to sensible files like in `.ssh`
+The main idea is to have Claude working in an isolated environment so that the damage caused by any unwanted actions is limited as much as possible. Claude has no access to sensitive files like those in `.ssh` or anywhere else on the server.
 
-To this aim, for each experiment only three folders are mounted inside the container, and therefore are allowed for Claude to act upon:
+To this end, for each experiment only three directories are mounted inside the container — and therefore visible to Claude:
 
-- a script folder in read/write mode 
-- (one or more) data folder in read only mode
-- a `.claude` directory where history, skills and other files useful to claude can be placed
+- a **scripts** folder in read/write mode
+- a **data** folder in read-only mode
+- a **`.claude`** directory where history, skills, and other Claude-specific files are stored
 
-Crucially, for maximum security, the user will need to authenticate with Claude every time a session starts, and the credentials - already in the `.gitignore` - will be deleted when the session ends.
+Crucially, for security, you authenticate with Claude at the start of every session. Credentials are listed in `.gitignore` and are automatically deleted when the session ends, so they are never left on disk.
 
-These three folders live inside a specific directory in you `/home/storm_user` folder, named with an ID of the experiment such as `exp_1`.
+These three folders live inside a dedicated directory under `/home/storm_user/`, named after your experiment (e.g. `exp_1`).
 
 > [!IMPORTANT]
-> Importantly, you should also prepare a github repo for this folder, so that in case of disasters to the server (caused by Claude or other events), you can restore all the scripts up to the latest commit/push from the github repo.
+> You should create a GitHub repo for each experiment folder. If the server is ever damaged or lost (including by Claude), you can restore all scripts and history up to the latest push with a simple `git clone`.
 
-Here's an example
+Here's the folder structure:
 
 ```
 /home/users/storm_user/
-├── exp_1/                    ← git repo for the exp_1 experiment
+├── exp_1/                     ← git repo for experiment 1
 │   ├── .gitignore             ← excludes credentials only
-│   ├── docker-compose.yml     ← edit path(s) to the data dir(s)
+│   ├── docker-compose.yml     ← edit the path to your data directory
 │   ├── scripts/               ← your analysis scripts — tracked in git
 │   └── claude_state/          ← Claude history & skills — tracked in git
 │       └── .credentials.*     ← excluded by .gitignore, never committed
 │
-└── exp_2/                      ← git repo for the guts experiment
+└── exp_2/                     ← git repo for experiment 2
     ├── .gitignore
     ├── docker-compose.yml
     ├── scripts/
@@ -66,17 +66,17 @@ echo 'export UID=$(id -u)' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-> **Note for bash users:** `$UID` is a read-only built-in in bash, so the second line may print a harmless `readonly variable` warning. It is safe to ignore — bash already has the correct value.
+> **Note for bash users:** `$UID` is a read-only built-in in bash, so the second line may print a harmless `readonly variable` warning. You can safely ignore it — bash already has the correct value.
 
 ---
 
 ## Setting up a new experiment
+
 **WE WILL PROVIDE A VIDEO TUTORIAL FOR THIS**
 
-### Step 0 - Create a new repo on github with the name of the experiment
-Go to github.com and log into your account. Make sure that on github.com you have already registered a _public_ key created on the server (storm), as you will need it to push and pull from the github account to your local repo.
+### Step 0 — Create a new repo on GitHub
 
-For instance in our case we could call it `exp_1`
+Go to [github.com](https://github.com) and log into your account. Create a new repository named after your experiment (e.g. `exp_1`). Make sure you have already registered a public SSH key from the server (STORM) in your GitHub account, as you will need it to push and pull.
 
 ### Step 1 — Create the experiment folder and initialise git
 
@@ -88,12 +88,10 @@ git init
 
 ### Step 2 — Copy the template files into the folder
 
-
-
-Copy these two files from the template (provided by your admin):
+Copy these two files from the template provided by your admin:
 
 > [!IMPORTANT]
-> `.gitignore` is a hidden file - like all files starting with a `.` - and therefore not visible with a simple `ls`. Make sure you always use `ls -lha` and operate in the terminal rather than in a gui-based file manager.
+> `.gitignore` is a hidden file (all files starting with `.` are hidden) and is not visible with a plain `ls`. Always use `ls -lha` in the terminal — avoid GUI file managers for this setup.
 
 ```
 .gitignore
@@ -110,11 +108,11 @@ The `claude_state/` directory is created automatically the first time you run th
 
 ### Step 3 — Edit the one placeholder in `docker-compose.yml`
 
-Only the data path needs to change — scripts and claude_state use relative paths and are already correct:
+Open `docker-compose.yml` and change the data volume path — scripts and `claude_state` use relative paths and are already correct:
 
 ```yaml
 # ⚠️  Edit this line only:
-- /path/to/your/mri-data:/workspace/data:ro
+- /path/to/your/data/directory/:/workspace/data:ro
 ```
 
 For example:
@@ -130,7 +128,7 @@ Save the file.
 ```bash
 git add .gitignore docker-compose.yml scripts/
 git commit -m "init exp_1 experiment"
-git remote add origin https://github.com/[github username]/exp_1.git
+git remote add origin git@github.com:[github_username]/exp_1.git
 git push -u origin main
 ```
 
@@ -147,7 +145,7 @@ docker compose run --rm claude_sbl
 
 That's it. Claude Code starts with access to your scripts and data for this experiment.
 
-- **Every session:** Claude Code will display a login URL. Open it in your browser, log in with your Anthropic account, and the session starts. *(Login is required each session — credentials are intentionally not saved.)*
+**Every session:** Claude Code will display a login URL. Open it in your browser, log in with your Anthropic account, and the session starts. *(Login is required each session — credentials are intentionally not saved between sessions.)*
 
 ---
 
@@ -157,13 +155,13 @@ That's it. Claude Code starts with access to your scripts and data for this expe
 |---|---|
 | `/workspace/scripts/` | ✅ Read and write — Claude edits your scripts here |
 | `/workspace/data/` | 👁️ Read only — cannot modify or delete data |
-| Everything else | 🚫 Not visible — completely outside the container |
+| Everything else on the server | 🚫 Not visible — completely outside the container |
 
 ---
 
 ## Committing after a session
 
-After working with Claude, commit from the host terminal:
+After working with Claude, commit from your host terminal (not from inside Claude):
 
 ```bash
 cd /home/users/storm_user/exp_1
@@ -180,7 +178,7 @@ This captures both new/modified scripts and any updates to Claude's history and 
 
 ## Experiment isolation
 
-Each experiment folder is a completely independent git repo. Claude working on `exp_1` has no access to `guts` data, scripts, or history — and vice versa.
+Each experiment folder is a completely independent git repo. Claude working on `exp_1` has no access to `exp_2` data, scripts, or history — and vice versa.
 
 If you want to share a custom command ("skill") between experiments, copy the relevant file from one `claude_state/commands/` directory to another on the host.
 
@@ -195,10 +193,13 @@ No. The data volume is mounted read-only (`:ro`). Any write or delete attempt is
 No — for two reasons: (1) git is not installed inside the container, so Claude cannot run any git commands; (2) even if you run git from the host, the `.gitignore` excludes all known credential file names.
 
 **Can Claude access files outside my scripts and data directories?**
-No. Docker's isolation ensures only the paths listed in `docker-compose.yml` are visible inside the container.
+No. Docker isolation ensures only the paths listed in `docker-compose.yml` are visible inside the container.
 
 **What is `claude_state/`?**
-Claude's working memory for this experiment: conversation history, custom commands, and settings. It is committed to git (minus credentials) so it survives a server failure. Delete it if you want to clear Claude's history for this experiment.
+Claude's working memory for this experiment: conversation history, custom commands, and settings. It is committed to git (minus credentials) so it survives a server failure. Delete it if you want a completely fresh start for this experiment.
 
 **Why do I need to log in every session?**
-Credentials are intentionally not saved between sessions for security. Your history and custom commands are preserved in `claude_state/` and are committed to git.
+Credentials are intentionally not saved between sessions for security. Your history and custom commands are preserved in `claude_state/` and committed to git — only the authentication token is discarded.
+
+**Files I created during a session are owned by a strange user — why?**
+This should not happen with this setup. The container runs as your own UID/GID, so files written to `scripts/` are owned by you on the host, just like any file you create directly.
