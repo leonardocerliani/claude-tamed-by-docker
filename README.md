@@ -1,4 +1,4 @@
-# Claude Code — Getting Started
+# Claude Code in Docker — Getting Started
 
 This setup lets you run Claude Code inside a secure Docker container on the server. Claude can only access the directories you explicitly give it — nothing else on the filesystem is visible.
 
