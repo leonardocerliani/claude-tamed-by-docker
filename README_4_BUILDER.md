@@ -1,27 +1,29 @@
 # Claude Code Docker Sandbox — Admin Guide
 
-This document is for the person who maintains the `claude_sbl` Docker image on the server. Users receive `docker-compose.yml`, `README.md`, and `.gitignore` — one copy per experiment folder.
+This document is for the person who builds and maintains the `claude_sbl` Docker image on the server. Users receive only three files: `docker-compose.yml`, `README.md`, and `.gitignore` — one set per experiment folder.
 
 ---
 
-## What lives here
+## Repository structure
 
 ```
 .
-├── Dockerfile            # defines the claude_sbl image
-├── claude-session.sh     # credential-wipe wrapper — copied into the image at build time
-├── docker-compose.yml    # distributed to users (references claude_sbl)
-├── README.md             # distributed to users
-├── README_4_BUILDER.md   # this file — for the admin only
-└── .gitignore            # excludes credential files within claude_state/ from git
+├── Dockerfile              # defines the claude_sbl image
+├── entrypoint.sh           # runs as root at startup: creates user, drops to it via gosu
+├── claude-session.sh       # wipes credentials before every Claude session
+├── docker-compose.yml      # distributed to users (one copy per experiment folder)
+├── README.md               # distributed to users
+├── README_4_BUILDER.md     # this file — admin only
+└── .gitignore              # excludes .env and credential files from git
 ```
 
-The `Dockerfile`, `claude-session.sh`, and this file stay with the admin. Users receive `docker-compose.yml`, `README.md`, and `.gitignore` — the three files they copy into each new experiment folder.
+`Dockerfile`, `entrypoint.sh`, `claude-session.sh`, and this file stay with the admin.
+Users receive only `docker-compose.yml`, `README.md`, and `.gitignore`.
 
 ### What a user's experiment folder looks like
 
 ```
-/home/users/username/emoreg/       ← git repo
+/home/users/username/exp_1/        ← git repo
 ├── .gitignore                     ← from this template
 ├── docker-compose.yml             ← from this template, one path edited
 ├── scripts/                       ← user's analysis scripts, tracked in git
@@ -33,143 +35,146 @@ Each experiment is a self-contained git repo. Scripts, Claude history, and custo
 
 ---
 
-## Building the image for the first time
+## How the image works
+
+### Build-time (Dockerfile)
+
+The image is built from `debian:bookworm-slim`. At build time:
+
+1. Node.js LTS is installed via the official NodeSource repository
+2. Claude Code CLI (`@anthropic-ai/claude-code`) is installed globally via npm
+3. `gosu` is installed — a minimal, correct privilege-dropping utility designed for containers
+4. `claude-session.sh` is copied to `/usr/local/bin/claude-session` and made executable
+5. `entrypoint.sh` is set as the container `ENTRYPOINT`
+6. The `/workspace` directory structure (`scripts/`, `data/`, `.claude/`) is created
+
+### Runtime (entrypoint.sh)
+
+#### The problem it solves
+
+By default Docker containers run as root (uid 0). If Claude writes a file to `./scripts/` while running as root, that file ends up owned by root on the host — the real user can't edit or delete it without `sudo`. Broken.
+
+The obvious fix — putting `user: "1006:1006"` in `docker-compose.yml` — causes a different problem: uid 1006 doesn't exist in the container's `/etc/passwd`. Node.js crashes trying to look up the user identity, and the Claude TUI never starts.
+
+`entrypoint.sh` is the standard container solution: **start as root, create the user, then permanently drop privileges before running anything sensitive.**
+
+#### What the script does, line by line
+
+```bash
+set -e
+```
+Abort immediately if any command fails.
+
+```bash
+USER_ID=${USER_ID:-1000}
+GROUP_ID=${GROUP_ID:-1000}
+```
+Read UID and GID from the environment (set by `USER_ID: ${UID}` and `GROUP_ID: ${GID}` in `docker-compose.yml`, which come from the user's shell exports). Default to 1000 if not set.
+
+```bash
+if ! getent group appgroup >/dev/null 2>&1; then
+    groupadd -g "$GROUP_ID" appgroup
+fi
+```
+Creates a group `appgroup` inside the container with the host GID. Idempotent — skipped if the group already exists.
+
+```bash
+if ! id -u appuser >/dev/null 2>&1; then
+    useradd -m -u "$USER_ID" -g "$GROUP_ID" -s /bin/bash appuser
+fi
+```
+Creates a user `appuser` with the host UID/GID. Now uid `$USER_ID` exists in `/etc/passwd` — Node.js can resolve the user identity and the Claude TUI initialises correctly.
+
+```bash
+export HOME=/workspace
+```
+Overrides the home directory to `/workspace`, where the bind mounts live.
+
+```bash
+exec gosu appuser "$@"
+```
+Drops from root to `appuser` and executes the command (`claude-session` by default). `exec` replaces the shell so no root process is left running as a parent. From this point the entire Claude session runs as uid `$USER_ID` with no path back to root (`no-new-privileges:true` enforces this).
+
+#### Why `gosu` and not `su` or `sudo`?
+
+- `su` is designed for interactive login shells — it leaves a root parent process running
+- `sudo` requires configuration files and can re-grant privileges
+- `gosu` is a minimal tool built specifically for this container pattern: drop once, exec, done — no parent process, no re-escalation possible
+
+### Session wrapper (claude-session.sh)
+
+Before starting Claude Code, this script deletes all known credential file names from `~/.claude/` (mapped to `/workspace/.claude/`). This ensures:
+
+- The user must authenticate via browser at the start of every session
+- No valid authentication token sits unattended on the host filesystem between sessions
+
+History, custom commands, and settings in `claude_state/` are preserved — only credential files are wiped.
+
+---
+
+## Building the image
+
+From this directory:
 
 ```bash
 docker build -t claude_sbl .
 ```
 
-This will:
-1. Pull the official `debian:bookworm-slim` base image
-2. Add the NodeSource LTS repository and install Node.js
-3. Install the Claude Code CLI globally via npm
-4. Set up the `/workspace` directory structure
-
-The image is stored locally on this server and referenced by name in every user's `docker-compose.yml` via `image: claude_sbl`. Users do not need internet access to pull it — it is already present on the machine.
-
-Verify the image was built correctly:
+Verify the build:
 
 ```bash
 docker images claude_sbl
+docker run --rm claude_sbl claude --version
 ```
 
 ---
 
 ## Updating Claude Code to a newer version
 
-Claude Code is installed at image build time. To update it, rebuild the image without cache (so npm fetches the latest version):
+Claude Code is installed at build time via npm. To update it, rebuild without cache:
 
 ```bash
 docker build --no-cache -t claude_sbl .
 ```
 
-> **Note for users:** Since containers are ephemeral (`--rm`), users automatically get the new image the next time they run:
-> ```bash
-> docker compose run --rm claude_sbl
-> ```
-> No action needed on their part. Their `claude_state/` (history, custom commands) is unaffected — it lives on the host, not inside the container.
-
----
-
-## Checking which version of Claude Code is installed
-
-```bash
-docker run --rm claude_sbl claude --version
-```
+Users automatically get the updated image the next time they run their session command. Their `claude_state/` (history, custom commands, settings) is unaffected — it lives on the host, not inside the container.
 
 ---
 
 ## Security design
 
-The `docker-compose.yml` that users receive enforces the following hardening settings. Here is what each one does and why it matters.
+### What is enforced
 
-### `user: "${UID}:${GID}"` — No root inside the container
-
-The container process runs as the same user as the person who launched it (their host UID and GID). This means:
-
-- Claude Code has no more filesystem permissions than the human user
-- If something goes wrong, the blast radius is limited to what that user can access on the host
-- Files written to mounted volumes are owned by the correct user (no root-owned files cluttering the host)
-
-### `read_only: true` — Immutable container filesystem
-
-The container's own filesystem (everything that is not a bind-mounted volume or tmpfs) is locked read-only at the kernel level. In practice this means:
-
-- No process inside the container can install new software, modify binaries, or plant persistent files
-- The Claude Code CLI and its dependencies are frozen exactly as built into the image
-- The only writable locations are the ones explicitly declared: the bind-mounted volumes and `/tmp`
-
-**Analogy:** A read-only DVD — you can run what's on it, but you cannot burn new content onto it.
-
-### `security_opt: no-new-privileges:true` — No privilege escalation
-
-On Linux, certain binaries carry a **setuid** or **setgid** flag that lets them temporarily run as root even when invoked by a normal user (classic examples: `sudo`, `passwd`, `ping`). This flag blocks that mechanism entirely at the kernel level.
-
-With this setting, a process that starts as UID 1000 stays at UID 1000 for its entire lifetime, regardless of what binaries it calls.
-
-### `cap_drop: ALL` — No Linux capabilities
-
-Linux root access is not a single on/off switch. It is actually a set of ~40 fine-grained permissions called **capabilities**. Even containers that don't run as root are, by default, granted a subset of them. Examples of what they allow:
-
-| Capability | What it permits |
-|---|---|
-| `CAP_NET_ADMIN` | Reconfigure network interfaces |
-| `CAP_SYS_PTRACE` | Inspect memory of other running processes |
-| `CAP_CHOWN` | Change file ownership arbitrarily |
-| `CAP_KILL` | Send signals to any process on the system |
-
-`cap_drop: ALL` removes every one of them. Claude Code only needs to read files, write files, and make outbound HTTPS calls to Anthropic's API — it needs zero kernel-level capabilities to do its job.
-
-### How the four layers work together
-
-```
-cap_drop: ALL              →  no kernel-level power to abuse
-no-new-privileges: true    →  cannot gain power through setuid/setgid tricks
-read_only: true            →  cannot install new tools or modify the runtime
-user: ${UID}:${GID}        →  not root to begin with
-```
-
-Each setting independently limits what a misbehaving script or a compromised Claude session could do. Together they make the container significantly more resistant to exploitation.
-
----
-
-## Why `/tmp` needs `tmpfs`
-
-With `read_only: true`, any attempt to write to the container's filesystem fails — including writes to `/tmp`. Claude Code needs a writable temp directory during normal operation (for intermediate files, auth flows, etc.). The `tmpfs` mount provides a fresh, in-memory `/tmp` that is writable but:
-
-- Lives only in RAM — nothing is written to disk
-- Is destroyed when the container stops
-- Is invisible to the host filesystem
-
----
-
-## The `claude-session` wrapper — credential hygiene
-
-The image includes a small shell script at `/usr/local/bin/claude-session`. Users run `claude-session` instead of `claude` to start a session.
-
-What it does on every invocation:
-1. Deletes any credential files found in `~/.claude/` (covering all known file names used by Claude Code across versions)
-2. Launches `claude` normally
-
-This means:
-- **Credentials are never persisted.** Even if a previous session wrote a credential file to `claude_state/` on the host, it is wiped before Claude Code starts the next session. The user must log in via browser every time.
-- **History and custom commands are preserved.** Only credential files are removed — conversation history, settings, and custom slash commands in `claude_state/` survive across sessions.
-
-This is a deliberate security trade-off: a small login inconvenience per session in exchange for ensuring that no valid authentication token ever sits unattended on the host filesystem.
-
----
-
-## Why `claude_state/` is mounted from the host
-
-Claude Code stores its working state in `~/.claude/` (inside the container, this is `/workspace/.claude/`):
-
-| Content | Persisted? | Why |
+| Layer | Mechanism | Effect |
 |---|---|---|
-| Auth credentials | ❌ No | Wiped by `claude-session` before each session |
-| Conversation history | ✅ Yes | Past sessions provide useful context |
-| Custom commands / "skills" | ✅ Yes | Reusable prompts and workflows persist |
-| Settings | ✅ Yes | User preferences survive restarts |
+| Filesystem isolation | Docker bind mounts (only 3 dirs) | Claude sees nothing outside `scripts/`, `data/`, `.claude/` |
+| Correct user identity | `entrypoint.sh` + `gosu` | Claude runs as the host user's UID/GID — no root inside |
+| No privilege escalation | `security_opt: no-new-privileges:true` | Setuid/setgid file bits have no effect inside the container |
+| Ephemeral temp space | `tmpfs: /tmp` | `/tmp` is in-memory and destroyed on container exit |
+| Credential hygiene | `claude-session.sh` + `.gitignore` | Auth tokens wiped before each session; excluded from git |
 
-By mounting this directory from the host (`./claude_state:/workspace/.claude`), the non-credential state survives container restarts and rebuilds. Each user keeps their own `claude_state/` folder next to their personal copy of `docker-compose.yml`.
+### What is NOT active and why
 
-> **Git note:** `claude_state/` is committed to each user's experiment git repo so that history and skills are backed up. Only the credential files within it are excluded via `.gitignore`. Each user maintains their own `claude_state/` — they should not share or merge state directories between users.
+**`cap_drop: ALL`** — Removing all Linux capabilities prevents `groupadd` and `useradd` in `entrypoint.sh` from writing to `/etc/group`, `/etc/passwd`, and related files. The container therefore retains Docker's default capability set. After `gosu` drops to `appuser`, `no-new-privileges:true` prevents those capabilities from being exploited by any process running as `appuser`.
+
+**`read_only: true`** — The `groupadd` and `useradd` commands in `entrypoint.sh` write to the container's root filesystem (`/etc/group`, `/etc/passwd`, `/etc/shadow`, `/etc/gshadow`). Setting `read_only: true` in the compose file breaks this and prevents the container from starting. This is documented in `docker-compose.yml` with a warning comment. Do not enable it without redesigning the user-creation mechanism.
+
+### Key security property
+
+Claude Code can only read or write the three explicitly mounted directories. The container filesystem is ephemeral — any changes to it (outside bind-mounts and tmpfs) disappear when the container exits (`--rm`). The host filesystem is not accessible beyond what is listed in `docker-compose.yml`.
+
+---
+
+## Distributing files to users
+
+Users need exactly three files per experiment folder:
+
+| File | Notes |
+|---|---|
+| `docker-compose.yml` | They edit only the data volume path |
+| `README.md` | Usage instructions |
+| `.gitignore` | Excludes credentials and `.env` from git |
+
+They do **not** need `Dockerfile`, `entrypoint.sh`, `claude-session.sh`, or this file.
+
+The `claude-session` command is baked into the image — users don't need the script itself.

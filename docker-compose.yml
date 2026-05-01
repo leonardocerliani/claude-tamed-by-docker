@@ -1,3 +1,8 @@
+# NOTE:
+# This container dynamically creates a user at startup (entrypoint.sh).
+# Therefore the root filesystem must be writable.
+# Do NOT enable read_only: true — it will break user creation.
+
 services:
   claude_sbl:
     image: claude_sbl
@@ -15,15 +20,12 @@ services:
     security_opt:
       - no-new-privileges:true
 
+    # ⚠️ Do NOT enable — breaks entrypoint user creation (see top of file)
+    # read_only: true
+
     # Temporary writable space (Claude needs /tmp)
     tmpfs:
       - /tmp
-
-    cap_drop:
-      - ALL
-    cap_add:
-      - SETUID
-      - SETGID
 
 
     volumes:

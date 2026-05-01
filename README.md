@@ -56,14 +56,17 @@ Everything inside the experiment folder (except credentials) is committed to git
 
 ## One-time setup (per user)
 
-### Export your group ID
+### Export your UID and GID
 
-`$UID` is set automatically by bash, but `$GID` may not be. Add this to your shell config so it's always available:
+Docker Compose needs `$UID` and `$GID` to run the container as your user. Add both to your shell config so they are always available:
 
 ```bash
 echo 'export GID=$(id -g)' >> ~/.bashrc
+echo 'export UID=$(id -u)' >> ~/.bashrc
 source ~/.bashrc
 ```
+
+> **Note for bash users:** `$UID` is a read-only built-in in bash, so the second line may print a harmless `readonly variable` warning. It is safe to ignore — bash already has the correct value.
 
 ---
 
@@ -87,7 +90,7 @@ git init
 
 
 
-Copy these four files from the template (provided by your admin):
+Copy these two files from the template (provided by your admin):
 
 > [!IMPORTANT]
 > `.gitignore` is a hidden file - like all files starting with a `.` - and therefore not visible with a simple `ls`. Make sure you always use `ls -lha` and operate in the terminal rather than in a gui-based file manager.
