@@ -83,7 +83,12 @@ git init
 
 ### Step 2 — Copy the template files into the folder
 
+
+
 Copy these four files from the template (provided by your admin):
+
+> [!IMPORTANT]
+> `.gitignore` is a hidden file, not visible with a simple `ls`. Make sure you always use `ls -lha` and operate in the terminal rather than in a gui-based file manager.
 
 ```
 .gitignore
