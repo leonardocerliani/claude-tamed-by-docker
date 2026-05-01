@@ -1,0 +1,8 @@
+# Credential files inside the claude_state/ directory — NEVER commit these.
+# All other contents of claude_state/ (history, skills, settings) ARE committed
+# so they are backed up in the git repo along with your scripts.
+claude_state/.credentials.json
+claude_state/credentials.json
+claude_state/.credentials
+claude_state/auth.json
+claude_state/auth

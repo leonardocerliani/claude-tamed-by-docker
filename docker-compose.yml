@@ -1,0 +1,39 @@
+services:
+  claude_SBL:
+    image: claude_SBL          # pre-built by the admin — no Dockerfile needed
+    command: claude-session    # wipes credentials, then starts Claude Code
+    stdin_open: true
+    tty: true
+
+    # Run as the host user — no root inside the container.
+    # $UID is set automatically by bash; see README.md for GID setup.
+    user: "${UID}:${GID}"
+
+    # Tell Claude Code where home is — non-root users have no system home inside
+    # the container, so we point HOME to /workspace where our bind mounts live.
+    environment:
+      HOME: /workspace
+
+    # --- Security hardening ---
+    read_only: true            # container root filesystem is read-only
+    security_opt:
+      - no-new-privileges:true # processes cannot gain new privileges via setuid/setgid
+    cap_drop:
+      - ALL                    # drop every Linux capability
+
+    # Writable scratch space for temp files (Claude Code needs /tmp)
+    tmpfs:
+      - /tmp
+
+    volumes:
+      # Claude Code state: history, skills, settings — backed up in this git repo.
+      # Credentials are excluded from git via .gitignore and wiped at session start.
+      - ./claude_state:/workspace/.claude
+
+      # Scripts directory — relative path, part of this git repo.
+      # Claude can read AND write here.
+      - ./scripts:/workspace/scripts:rw
+
+      # MRI data — Claude can READ but NOT write.
+      # ⚠️  Edit this absolute path to point to this experiment's data directory.
+      - /path/to/your/mri-data:/workspace/data:ro
