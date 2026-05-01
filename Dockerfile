@@ -15,7 +15,7 @@ RUN npm install -g @anthropic-ai/claude-code
 
 # Install session wrapper
 COPY claude-session.sh /usr/local/bin/claude-session
-RUN chmod +x /usr/local/bin/claude-session
+RUN chmod 755 /usr/local/bin/claude-session
 
 # Workspace
 RUN mkdir -p /workspace/scripts /workspace/data /workspace/.claude
