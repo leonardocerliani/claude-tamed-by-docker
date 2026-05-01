@@ -10,16 +10,38 @@ Each experiment lives in its own git repository. Scripts, Claude history, and cu
 
 ## Concept: one folder = one experiment = one git repo
 
+> [!NOTE]
+> In the following replace 
+> - `storm_user` with your storm username
+> - `exp_1` with the name of one of your experiment
+
+The main idea is to have Claude working in an isolated environment so that the damage caused by potential unwanted actions can be limited as much as possible, and Claude will have no access to sensible files like in `.ssh`
+
+To this aim, for each experiment only three folders are mounted inside the container, and therefore are allowed for Claude to act upon:
+
+- a script folder in read/write mode 
+- (one or more) data folder in read only mode
+- a `.claude` directory where history, skills and other files useful to claude can be placed
+
+Crucially, for maximum security, the user will need to authenticate with Claude every time a session starts, and the credentials - already in the `.gitignore` - will be deleted when the session ends.
+
+These three folders live inside a specific directory in you `/home/storm_user` folder, named with an ID of the experiment such as `exp_1`.
+
+> [!IMPORTANT]
+> Importantly, you should also prepare a github repo for this folder, so that in case of disasters to the server (caused by Claude or other events), you can restore all the scripts up to the latest commit/push from the github repo.
+
+Here's an example
+
 ```
-/home/users/leonardo/
-├── emoreg/                    ← git repo for the emoreg experiment
+/home/users/storm_user/
+├── exp_1/                    ← git repo for the exp_1 experiment
 │   ├── .gitignore             ← excludes credentials only
-│   ├── docker-compose.yml     ← one path to edit (the data dir)
+│   ├── docker-compose.yml     ← edit path(s) to the data dir(s)
 │   ├── scripts/               ← your analysis scripts — tracked in git
 │   └── claude_state/          ← Claude history & skills — tracked in git
 │       └── .credentials.*     ← excluded by .gitignore, never committed
 │
-└── guts/                      ← git repo for the guts experiment
+└── exp_2/                      ← git repo for the guts experiment
     ├── .gitignore
     ├── docker-compose.yml
     ├── scripts/
@@ -44,12 +66,18 @@ source ~/.bashrc
 ---
 
 ## Setting up a new experiment
+**WE WILL PROVIDE A VIDEO TUTORIAL FOR THIS**
+
+### Step 0 - Create a new repo on github with the name of the experiment
+Go to github.com and log into your account. Make sure that on github.com you have already registered a _public_ key created on the server (storm), as you will need it to push and pull from the github account to your local repo.
+
+For instance in our case we could call it `exp_1`
 
 ### Step 1 — Create the experiment folder and initialise git
 
 ```bash
-mkdir /home/users/youruser/emoreg
-cd /home/users/youruser/emoreg
+mkdir /home/users/storm_user/exp_1
+cd /home/users/storm_user/exp_1
 git init
 ```
 
@@ -82,7 +110,7 @@ Only the data path needs to change — scripts and claude_state use relative pat
 For example:
 
 ```yaml
-- /data00/youruser/emoreg/data_work:/workspace/data:ro
+- /data00/storm_user/exp_1/data_work:/workspace/data:ro
 ```
 
 Save the file.
@@ -91,8 +119,8 @@ Save the file.
 
 ```bash
 git add .gitignore docker-compose.yml scripts/
-git commit -m "init emoreg experiment"
-git remote add origin https://github.com/youruser/emoreg.git
+git commit -m "init exp_1 experiment"
+git remote add origin https://github.com/storm_user/exp_1.git
 git push -u origin main
 ```
 
@@ -103,7 +131,7 @@ git push -u origin main
 From the experiment folder:
 
 ```bash
-cd /home/users/youruser/emoreg
+cd /home/users/storm_user/exp_1
 docker compose run --rm claude_SBL
 ```
 
@@ -128,7 +156,7 @@ That's it. Claude Code starts with access to your scripts and data for this expe
 After working with Claude, commit from the host terminal:
 
 ```bash
-cd /home/users/youruser/emoreg
+cd /home/users/storm_user/exp_1
 git add -A
 git commit -m "session: describe what was done"
 git push
@@ -142,7 +170,7 @@ This captures both new/modified scripts and any updates to Claude's history and 
 
 ## Experiment isolation
 
-Each experiment folder is a completely independent git repo. Claude working on `emoreg` has no access to `guts` data, scripts, or history — and vice versa.
+Each experiment folder is a completely independent git repo. Claude working on `exp_1` has no access to `guts` data, scripts, or history — and vice versa.
 
 If you want to share a custom command ("skill") between experiments, copy the relevant file from one `claude_state/commands/` directory to another on the host.
 
