@@ -125,7 +125,7 @@ Save the file.
 ```bash
 git add .gitignore docker-compose.yml scripts/
 git commit -m "init exp_1 experiment"
-git remote add origin https://github.com/storm_user/exp_1.git
+git remote add origin https://github.com/[github username]/exp_1.git
 git push -u origin main
 ```
 
