@@ -1,6 +1,6 @@
 # Claude Code Docker Sandbox — Admin Guide
 
-This document is for the person who maintains the `claude_SBL` Docker image on the server. Users receive `docker-compose.yml`, `README.md`, and `.gitignore` — one copy per experiment folder.
+This document is for the person who maintains the `claude_sbl` Docker image on the server. Users receive `docker-compose.yml`, `README.md`, and `.gitignore` — one copy per experiment folder.
 
 ---
 
@@ -8,9 +8,9 @@ This document is for the person who maintains the `claude_SBL` Docker image on t
 
 ```
 .
-├── Dockerfile            # defines the claude_SBL image
+├── Dockerfile            # defines the claude_sbl image
 ├── claude-session.sh     # credential-wipe wrapper — copied into the image at build time
-├── docker-compose.yml    # distributed to users (references claude_SBL)
+├── docker-compose.yml    # distributed to users (references claude_sbl)
 ├── README.md             # distributed to users
 ├── README_4_BUILDER.md   # this file — for the admin only
 └── .gitignore            # excludes credential files within claude_state/ from git
@@ -36,7 +36,7 @@ Each experiment is a self-contained git repo. Scripts, Claude history, and custo
 ## Building the image for the first time
 
 ```bash
-docker build -t claude_SBL .
+docker build -t claude_sbl .
 ```
 
 This will:
@@ -45,12 +45,12 @@ This will:
 3. Install the Claude Code CLI globally via npm
 4. Set up the `/workspace` directory structure
 
-The image is stored locally on this server and referenced by name in every user's `docker-compose.yml` via `image: claude_SBL`. Users do not need internet access to pull it — it is already present on the machine.
+The image is stored locally on this server and referenced by name in every user's `docker-compose.yml` via `image: claude_sbl`. Users do not need internet access to pull it — it is already present on the machine.
 
 Verify the image was built correctly:
 
 ```bash
-docker images claude_SBL
+docker images claude_sbl
 ```
 
 ---
@@ -60,12 +60,12 @@ docker images claude_SBL
 Claude Code is installed at image build time. To update it, rebuild the image without cache (so npm fetches the latest version):
 
 ```bash
-docker build --no-cache -t claude_SBL .
+docker build --no-cache -t claude_sbl .
 ```
 
 > **Note for users:** Since containers are ephemeral (`--rm`), users automatically get the new image the next time they run:
 > ```bash
-> docker compose run --rm claude_SBL
+> docker compose run --rm claude_sbl
 > ```
 > No action needed on their part. Their `claude_state/` (history, custom commands) is unaffected — it lives on the host, not inside the container.
 
@@ -74,7 +74,7 @@ docker build --no-cache -t claude_SBL .
 ## Checking which version of Claude Code is installed
 
 ```bash
-docker run --rm claude_SBL claude --version
+docker run --rm claude_sbl claude --version
 ```
 
 ---

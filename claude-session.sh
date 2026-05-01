@@ -8,3 +8,4 @@ rm -f \
   "${HOME}/.claude/auth.json" \
   "${HOME}/.claude/auth"
 exec claude "$@"
+

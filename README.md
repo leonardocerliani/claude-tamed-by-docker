@@ -4,7 +4,7 @@ This setup lets you run Claude Code inside a secure Docker container on the serv
 
 Each experiment lives in its own git repository. Scripts, Claude history, and custom skills are all version-controlled and backed up. Credentials are never committed.
 
-**Prerequisites:** Docker and Docker Compose must be installed, and the `claude_SBL` image must already be available on this server (ask your admin if it isn't). A github account and _very_ basic familiarity with version control are also assumed.
+**Prerequisites:** Docker and Docker Compose must be installed, and the `claude_sbl` image must already be available on this server (ask your admin if it isn't). A github account and _very_ basic familiarity with version control are also assumed.
 
 ![](./assets/docker-claude.png)
 
@@ -139,7 +139,7 @@ From the experiment folder:
 
 ```bash
 cd /home/users/storm_user/exp_1
-docker compose run --rm claude_SBL
+docker compose run --rm claude_sbl
 ```
 
 That's it. Claude Code starts with access to your scripts and data for this experiment.

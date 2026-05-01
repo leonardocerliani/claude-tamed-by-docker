@@ -1,39 +1,37 @@
 services:
-  claude_SBL:
-    image: claude_SBL          # pre-built by the admin — no Dockerfile needed
-    command: claude-session    # wipes credentials, then starts Claude Code
+  claude_sbl:
+    image: claude_sbl
     stdin_open: true
     tty: true
 
-    # Run as the host user — no root inside the container.
-    # $UID is set automatically by bash; see README.md for GID setup.
-    user: "${UID}:${GID}"
-
-    # Tell Claude Code where home is — non-root users have no system home inside
-    # the container, so we point HOME to /workspace where our bind mounts live.
+    # Environment passed to entrypoint.sh
     environment:
       HOME: /workspace
+      USER_ID: ${UID}
+      GROUP_ID: ${GID}
+      TERM: xterm-256color
 
-    # --- Security hardening ---
-    read_only: true            # container root filesystem is read-only
+    # Security: drop everything, re-add only what's needed for gosu
     security_opt:
-      - no-new-privileges:true # processes cannot gain new privileges via setuid/setgid
-    cap_drop:
-      - ALL                    # drop every Linux capability
+      - no-new-privileges:true
 
-    # Writable scratch space for temp files (Claude Code needs /tmp)
+    # Temporary writable space (Claude needs /tmp)
     tmpfs:
       - /tmp
 
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+
+
     volumes:
-      # Claude Code state: history, skills, settings — backed up in this git repo.
-      # Credentials are excluded from git via .gitignore and wiped at session start.
+      # Claude state (history, settings, etc.)
       - ./claude_state:/workspace/.claude
 
-      # Scripts directory — relative path, part of this git repo.
-      # Claude can read AND write here.
+      # User scripts (read/write)
       - ./scripts:/workspace/scripts:rw
 
-      # MRI data — Claude can READ but NOT write.
-      # ⚠️  Edit this absolute path to point to this experiment's data directory.
-      - /path/to/your/mri-data:/workspace/data:ro
+      # Data (read-only)
+      - /data03/MRI_hackaton_data/Data_collection/bids/:/workspace/data:ro
